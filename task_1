@@ -1,0 +1,76 @@
+import asyncio
+from dataclasses import dataclass
+from enum import Enum
+from datetime import datetime
+import random
+
+
+class Response(Enum):
+    Success = 1
+    RetryAfter = 2
+    Failure = 3
+
+
+@dataclass
+class ApplicationResponse:
+    identifier: str
+    status: Response
+    description: str
+    last_request_time: datetime
+    retriesCount: int
+
+
+async def get_application_status(identifier: str, service_num: int) -> Response:
+    await asyncio.sleep(random.uniform(0.5, 2))
+    return random.choice([Response.Success, Response.RetryAfter, Response.Failure])
+
+
+async def perform_operation(identifier: str) -> ApplicationResponse:
+    TIMEOUT = 5
+    DELAY_BEFORE_NEXT = 3
+
+    start_time = datetime.now()
+
+    response1_task = asyncio.create_task(get_application_status(identifier, 1))
+    response2_task = asyncio.create_task(get_application_status(identifier, 2))
+
+    responses = await asyncio.gather(response1_task, response2_task)
+
+    end_time = datetime.now()
+    elapsed_time = (end_time - start_time).total_seconds()
+
+    if elapsed_time > TIMEOUT:
+        return ApplicationResponse(
+            identifier,
+            Response.Failure,
+            "Тайм-аут выполнения операции превышен",
+            end_time,
+            None,
+        )
+
+    if Response.Success in responses:
+        return ApplicationResponse(
+            identifier, Response.Success, "Операция успешна", end_time, None
+        )
+    elif Response.RetryAfter in responses:
+        await asyncio.sleep(DELAY_BEFORE_NEXT)
+        return ApplicationResponse(
+            identifier,
+            Response.RetryAfter,
+            "Повторить попытку после задержки",
+            end_time,
+            None,
+        )
+    else:
+        return ApplicationResponse(
+            identifier, Response.Failure, "Операция не удалась", end_time, None
+        )
+
+
+async def main():
+    identifier = str(random.randint(1, 999999))
+    result = await perform_operation(identifier)
+    print(result)
+
+
+asyncio.run(main())
